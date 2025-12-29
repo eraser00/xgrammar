@@ -119,11 +119,13 @@ class TagFormat(BaseModel):
     type: Literal["tag"] = "tag"
     """The type of the format."""
     begin: str
-    """The begin tag."""
+    """The begin tag. Can be a string or a regex pattern."""
     content: "Format"
     """The content of the tag. It can be any of the formats."""
     end: str
     """The end tag."""
+    begin_is_regex: bool = False
+    """Whether the begin tag should be interpreted as a regex pattern."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -263,11 +265,13 @@ class StructuralTagItem(BaseModel):
     """
 
     begin: str
-    """The begin tag."""
+    """The begin tag. Can be a string or a regex pattern."""
     schema_: Union[str, Type[BaseModel], Dict[str, Any]] = Field(alias="schema")
     """The schema."""
     end: str
     """The end tag."""
+    begin_is_regex: bool = False
+    """Whether the begin tag should be interpreted as a regex pattern."""
 
 
 class StructuralTag(BaseModel):
@@ -307,6 +311,7 @@ class StructuralTag(BaseModel):
                             )
                         ),
                         end=tag.end,
+                        begin_is_regex=tag.begin_is_regex,
                     )
                     for tag in tags
                 ],

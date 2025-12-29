@@ -123,9 +123,18 @@ struct TagFormat {
   std::string begin;
   std::shared_ptr<Format> content;
   std::string end;
+  bool begin_is_regex = false;
 
   TagFormat(std::string begin, std::shared_ptr<Format> content, std::string end)
       : begin(std::move(begin)), content(std::move(content)), end(std::move(end)) {}
+
+  TagFormat(
+      std::string begin, std::shared_ptr<Format> content, std::string end, bool begin_is_regex
+  )
+      : begin(std::move(begin)),
+        content(std::move(content)),
+        end(std::move(end)),
+        begin_is_regex(begin_is_regex) {}
 };
 
 struct TriggeredTagsFormat {

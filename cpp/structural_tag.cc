@@ -320,10 +320,20 @@ Result<TagFormat, ISTError> StructuralTagParser::ParseTagFormat(const picojson::
   if (end_it == obj.end() || !end_it->second.is<std::string>()) {
     return ResultErr<ISTError>("Tag format's end field must be a string");
   }
+  // begin_is_regex is optional.
+  bool begin_is_regex = false;
+  auto begin_is_regex_it = obj.find("begin_is_regex");
+  if (begin_is_regex_it != obj.end()) {
+    if (!begin_is_regex_it->second.is<bool>()) {
+      return ResultErr<ISTError>("begin_is_regex must be a boolean");
+    }
+    begin_is_regex = begin_is_regex_it->second.get<bool>();
+  }
   return ResultOk<TagFormat>(
       begin_it->second.get<std::string>(),
       std::make_shared<Format>(std::move(content).Unwrap()),
-      end_it->second.get<std::string>()
+      end_it->second.get<std::string>(),
+      begin_is_regex
   );
 }
 
@@ -731,7 +741,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  auto sub_grammar = Grammar::FromJSONSchema(format.json_schema);
+  auto sub_grammar =
+      Grammar::FromJSONSchema(format.json_schema, true, std::nullopt, std::make_pair(", ", ": "));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -808,7 +819,18 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagFormat& f
     return result;
   }
   auto sub_rule_id = std::move(result).Unwrap();
-  auto begin_expr = grammar_builder_.AddByteString(format.begin);
+
+  int32_t begin_expr;
+  if (format.begin_is_regex) {
+    // 如果 begin 是正则表达式，将其转换为 Grammar 并添加
+    auto begin_grammar = Grammar::FromRegex(format.begin);
+    auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, begin_grammar);
+    begin_expr = grammar_builder_.AddRuleRef(added_root_rule_id);
+  } else {
+    // 原有的字符串处理逻辑
+    begin_expr = grammar_builder_.AddByteString(format.begin);
+  }
+
   auto rule_ref_expr = grammar_builder_.AddRuleRef(sub_rule_id);
   int32_t sequence_expr_id;
   if (!format.end.empty()) {
@@ -833,6 +855,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     int matched_trigger_id = -1;
     for (int it_trigger = 0; it_trigger < static_cast<int>(format.triggers.size()); ++it_trigger) {
       const auto& trigger = format.triggers[it_trigger];
+      if (tag.begin_is_regex) {
+        // Regex begin match all triggers
+        trigger_to_tag_ids[it_trigger].push_back(it_tag);
+        continue;
+      }
       if (IsPrefix(trigger, tag.begin)) {
         if (matched_trigger_id != -1) {
           return ResultErr<ISTError>("One tag matches multiple triggers in a triggered tags format"
@@ -841,10 +868,11 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
         matched_trigger_id = it_trigger;
       }
     }
-    if (matched_trigger_id == -1) {
+    if ((matched_trigger_id == -1) && !tag.begin_is_regex) {
       return ResultErr<ISTError>("One tag does not match any trigger in a triggered tags format");
+    } else if (!tag.begin_is_regex) {
+      trigger_to_tag_ids[matched_trigger_id].push_back(it_tag);
     }
-    trigger_to_tag_ids[matched_trigger_id].push_back(it_tag);
 
     // Add the tag content to grammar
     auto result = Visit(*tag.content);
@@ -863,7 +891,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+
+      int32_t begin_expr_id;
+      if (tag.begin_is_regex) {
+        auto begin_grammar = Grammar::FromRegex(tag.begin);
+        auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, begin_grammar);
+        begin_expr_id = grammar_builder_.AddRuleRef(added_root_rule_id);
+      } else {
+        begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+      }
+
       auto end_expr_id = grammar_builder_.AddByteString(tag.end);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       choice_elements.push_back(
@@ -898,7 +935,19 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> choice_elements;
     for (const auto& tag_id : trigger_to_tag_ids[it_trigger]) {
       const auto& tag = format.tags[tag_id];
-      int begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
+
+      int32_t begin_expr_id;
+      if (tag.begin_is_regex) {
+        // 当 begin_is_regex 为 true 时，整个 begin 都作为正则表达式处理
+        // trigger 部分不需要纳入 constrained decode
+        auto begin_grammar = Grammar::FromRegex(tag.begin);
+        auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, begin_grammar);
+        begin_expr_id = grammar_builder_.AddRuleRef(added_root_rule_id);
+      } else {
+        // 原有逻辑：截取 trigger 后的部分
+        begin_expr_id = grammar_builder_.AddByteString(tag.begin.substr(trigger.size()));
+      }
+
       int end_expr_id = grammar_builder_.AddByteString(tag.end);
       int rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[tag_id]);
       choice_elements.push_back(
@@ -929,7 +978,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     std::vector<int> first_choice_elements;
     for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
       const auto& tag = format.tags[it_tag];
-      auto begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+
+      int32_t begin_expr_id;
+      if (tag.begin_is_regex) {
+        auto begin_grammar = Grammar::FromRegex(tag.begin);
+        auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, begin_grammar);
+        begin_expr_id = grammar_builder_.AddRuleRef(added_root_rule_id);
+      } else {
+        begin_expr_id = grammar_builder_.AddByteString(tag.begin);
+      }
+
       auto end_expr_id = grammar_builder_.AddByteString(tag.end);
       auto rule_ref_expr_id = grammar_builder_.AddRuleRef(tag_content_rule_ids[it_tag]);
       first_choice_elements.push_back(

@@ -31,6 +31,10 @@ class JSONSchemaFormat(BaseModel):
     """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema."""
+    style: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml"] = "json"
+    """How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:
+    <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML: <parameter name=\"key\">value</parameter>).
+    \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): <{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>)."""
 
 
 class QwenXMLParameterFormat(BaseModel):
@@ -70,6 +74,9 @@ class AnyTextFormat(BaseModel):
 
     type: Literal["any_text"] = "any_text"
     """The type of the format."""
+
+    excludes: List[str] = []
+    """List of strings that should not appear in the matched text."""
 
 
 class GrammarFormat(BaseModel):
@@ -114,7 +121,28 @@ class OrFormat(BaseModel):
 
 
 class TagFormat(BaseModel):
-    """A format that matches a tag: ``begin content end``."""
+    """A format that matches a tag: ``begin content end``.
+
+    The ``end`` field can be a single string or a list of possible end strings.
+    When multiple end strings are provided, any of them will be accepted as a valid
+    ending for the tag.
+
+    Examples
+    --------
+
+    Single end string:
+
+    .. code-block:: python
+
+        TagFormat(begin="<response>", content=..., end="</response>")
+
+    Multiple end strings:
+
+    .. code-block:: python
+
+        TagFormat(begin="<response>", content=..., end=["</response>", "</answer>"])
+
+    """
 
     type: Literal["tag"] = "tag"
     """The type of the format."""
@@ -122,8 +150,8 @@ class TagFormat(BaseModel):
     """The begin tag."""
     content: "Format"
     """The content of the tag. It can be any of the formats."""
-    end: str
-    """The end tag."""
+    end: Union[str, List[str]]
+    """The end tag(s). Can be a single string or a list of possible end strings."""
 
 
 class TriggeredTagsFormat(BaseModel):
@@ -175,6 +203,8 @@ class TriggeredTagsFormat(BaseModel):
     """Whether at least one of the tags must be generated."""
     stop_after_first: bool = False
     """Whether to stop after the first tag is generated."""
+    excludes: List[str] = []
+    """List of strings that should not appear in the matched text."""
 
 
 class TagsWithSeparatorFormat(BaseModel):

@@ -2560,16 +2560,16 @@ basic_structural_tags_instance_is_accepted = [
     ),
     (
         xgr.structural_tag.TagFormat(
-            begin=xgr.structural_tag.RegexFormat(pattern="<b\\d+>"),
+            begin=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">'),
             content=xgr.structural_tag.AnyTextFormat(),
             end="</b>",
         ),
-        "<b1>text</b>",
+        '<b id="1">text</b>',
         True,
     ),
     (
         xgr.structural_tag.TagFormat(
-            begin=xgr.structural_tag.RegexFormat(pattern="<b\\d+>"),
+            begin=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">'),
             content=xgr.structural_tag.AnyTextFormat(),
             end="</b>",
         ),
@@ -2580,12 +2580,12 @@ basic_structural_tags_instance_is_accepted = [
         xgr.structural_tag.TagFormat(
             begin=xgr.structural_tag.RegexBegin(
                 # The trigger arg of RegexBegin is optional
-                regex=xgr.structural_tag.RegexFormat(pattern="<b\\d+>")
+                regex=xgr.structural_tag.RegexFormat(pattern='<b id="\\d+">')
             ),
             content=xgr.structural_tag.AnyTextFormat(),
             end="</b>",
         ),
-        "<b1>text</b>",
+        '<b id="1">text</b>',
         True,
     ),
     # TriggeredTagsFormat
@@ -2597,7 +2597,7 @@ basic_structural_tags_instance_is_accepted = [
                     begin=xgr.structural_tag.RegexBegin(
                         trigger="<",
                         # The trigger text itself should not be part of the regex pattern
-                        regex=xgr.structural_tag.RegexFormat(pattern="b\\d+>"),
+                        regex=xgr.structural_tag.RegexFormat(pattern='b id="\\d+">'),
                     ),
                     content=xgr.structural_tag.AnyTextFormat(),
                     end="</b>",
@@ -2606,7 +2606,7 @@ basic_structural_tags_instance_is_accepted = [
             at_least_one=False,
             stop_after_first=False,
         ),
-        '<b1>"1"</b>,<b2>"2"</b>',
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
         True,
     ),
     (
@@ -2614,13 +2614,13 @@ basic_structural_tags_instance_is_accepted = [
             triggers=["<"],
             tags=[
                 xgr.structural_tag.TagFormat(
-                    begin="<b1>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                    begin='<b id="1">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
                 )
             ],
             at_least_one=False,
             stop_after_first=False,
         ),
-        '<b1>"1"</b>,<b2>"2"</b>',
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
         False,
     ),
     (
@@ -2628,16 +2628,16 @@ basic_structural_tags_instance_is_accepted = [
             triggers=["<"],
             tags=[
                 xgr.structural_tag.TagFormat(
-                    begin="<b1>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                    begin='<b id="1">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
                 ),
                 xgr.structural_tag.TagFormat(
-                    begin="<b2>", content=xgr.structural_tag.AnyTextFormat(), end="</b>"
+                    begin='<b id="2">', content=xgr.structural_tag.AnyTextFormat(), end="</b>"
                 ),
             ],
             at_least_one=False,
             stop_after_first=False,
         ),
-        '<b1>"1"</b>,<b2>"2"</b>',
+        '<b id="1">"1"</b>,<b id="2">"2"</b>',
         True,
     ),
     # TagsWithSeparatorFormat
